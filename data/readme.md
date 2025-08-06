@@ -17,3 +17,5 @@ The data used in the simulation study and SSI reconstruction analysis are public
 
 3. [CSIM SSI, accessed Mar 21 2024](https://lasp.colorado.edu/csim/data-and-ham-radio/) (used in SSI reconstruction section)
 - Richard, Erik, Dave Harber, Ginger Drake, Joel Rutkowsi, Zach Castleman, Matthew Smith, Jacob Sprunck, et al. 2019. “Compact Spectral Irradiance Monitor Flight Demonstration Mission.” In CubeSats and SmallSats for Remote Sensing III, 11131:15–34. SPIE. https://doi.org/10.1117/12.2531268.
+
+These data have been made available at the [this URL](https://figshare.com/s/870cc558b0114dc16378).
