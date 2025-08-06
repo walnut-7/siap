@@ -1,0 +1,9 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+siap.Rproj
+data/*.nc
+output/realdata/siap_ssi_reconstruced.csv
+output/realdata/siap_ssi_95_uq.csv
+*traintest.rds

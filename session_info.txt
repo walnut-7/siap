@@ -1,0 +1,18 @@
+─ Session info ───────────────────────────────────────────────────────────────────────────────────────────────────────
+ setting  value
+ version  R version 4.3.2 (2023-10-31)
+ os       Red Hat Enterprise Linux 8.10 (Ootpa)
+ system   x86_64, linux-gnu
+ ui       RStudio
+ language (EN)
+ collate  en_US.UTF-8
+ ctype    en_US.UTF-8
+ tz       America/Detroit
+ date     2025-07-21
+ rstudio  2025.05.999-dev+999 Mariposa Orchid (desktop)
+ pandoc   2.0.6 @ /usr/bin/pandoc
+
+─ Memory requirement ───────────────────────────────────────────────────────────────────────────────────────────────────────────
+ SIAP: memory per cpu = 10 GB, ncpus = 10
+ GP: memory per cpu = 10 GB, ncpus = 8
+ MARSS: memory per cpu = 10 GB, ncpus = 10
