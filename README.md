@@ -71,7 +71,47 @@ Rscript code/output_simulation.R
 Rscript code/output_realdata.R
 ```
 
+## Running SIAP, GP and MARSS
+
 The experiments were originally conducted on slurm cluster, managed by R package [`batchtools`](https://github.com/mlr-org/batchtools).
 However, the script is also adapted to local machine. 
 If you are running the scripts on clusters, please change the account name `account` accordingly in `code/simulation.R` and `code/realdata.R`. 
 We also provide scripts (`code/simulation_submit_marss_batches.R` and `code/simulation_submit_marss_batches.sh`) to submit 4000 MARSS jobs in simulation study every 2 hours, since the total number of jobs will likely exceed the maximum job number allowance.
+
+## Running TRMF and LATC
+
+The experiments were originally conducted on slurm cluster. Before running the actual experiments, the corresponding missingness is generated using `code/simulation_repl.R`, making sure the algorithms read the same replicates as those in the R experiments.
+
+### Single run example
+```bash
+bash code/simulation_py.sh trmf <pdt> <repl>
+bash code/simulation_py.sh latc <pdt> <repl>
+```
+
+### Batch submission example
+```bash
+# Submit TRMF jobs for pdt ∈ {0.1, 0.3, 0.5} and repl 1–100 as chunked sequential jobs
+python code/simulation_driver.py \
+  --pdt 0.1 0.3 0.5 \
+  --repl $(seq 1 100) \
+  --algo trmf \
+  --chunk-size 20 
+
+# Submit LATC jobs as Slurm array jobs (parallel across tasks within each chunk)
+python code/simulation_driver.py \
+  --pdt 0.1 0.3 0.5 \
+  --repl $(seq 1 100) \
+  --algo latc \
+  --chunk-size 20 
+```
+Results are written to `output/simulation/trmf/` and `output/simulation/latc/` as one JSON file per `(pdt, repl)` combination.
+
+### Collect results into CSV
+```bash
+python code/simulation_results.py --algo trmf --csv output/simulation/overall_rel_mrae_margin_trmf.csv
+python code/simulation_results.py --algo latc --csv output/simulation/overall_rel_mrae_margin_latc.csv
+```
+
+## Acknowledgements
+
+The TRMF and LATC algorithms used in this project are borrowed from the [transdim](https://github.com/xinychen/transdim) repository by [xinychen](https://github.com/xinychen).
