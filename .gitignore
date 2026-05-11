@@ -3,8 +3,21 @@
 .RData
 .Ruserdata
 siap.Rproj
+readme_db*.md
+
+# large data files
 data/*.nc
 output/realdata/siap_ssi_reconstruced.csv
 output/realdata/siap_ssi_95_uq.csv
 *traintest.rds
-readme_db*.md
+
+# vscode
+.vscode/
+
+# python import
+code/__pycache__/
+
+# temp files
+code/.slurm_params/
+code/repl/ 
+code/tmp/ 
