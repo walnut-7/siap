@@ -3,6 +3,7 @@ Code for reproducing the results in ["Matrix Factorization-Based Solar Spectral 
 
 # Restore environment
 
+## R
 0. Please check the system requirements in `session_info.txt` to ensure that your system has sufficient memory and storage capacity to run the experiments. 
 If the hardware requirements are not met, we also provide intermediate results that allow direct reproduction of the figures and tables.
 
@@ -13,7 +14,7 @@ If the hardware requirements are not met, we also provide intermediate results t
 We use [`renv`](https://rstudio.github.io/renv/) to manage and restore the R environment. The .Rprofile file (which sources `renv/activate.R`) is sourced automatically by R when a new R session starts in the project directory.
 After this, `renv` would specify a project-level library `renv/library`, where the R packages are/will be installed. 
 To install packages globally, you can temporarily deactivate the project and re-activate it after installing the package. 
-```
+```r
 renv::deactivate() # temporarily deactivate
 globallib <- .libPaths()
 install.packages("mypackage") # install packages globally
@@ -21,6 +22,12 @@ renv::activate() # re-activate
 .libPaths(c(.libPaths(), globallib)) # enable R to look in the global library 
 ```
 For more information about `renv`, see this [link](https://rstudio.github.io/renv/).
+
+## Python
+```bash
+conda env create -f environment.yml
+conda activate siap
+```
 
 # Prepare the data
 
@@ -65,7 +72,7 @@ The data used in the simulation study and SSI reconstruction analysis are public
 Set the project root directory `your/path/siap` as the working directory for R.
 Running the following commands will generate figures and tables in the `output/simulation` and `output/realdata` directories:
 
-```
+```bash
 cd your/path/siap
 Rscript code/output_simulation.R
 Rscript code/output_realdata.R

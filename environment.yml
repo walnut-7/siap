@@ -1,0 +1,13 @@
+name: siap
+channels:
+  - defaults
+dependencies:
+  - python=3.11
+  - pandas
+  - netcdf4
+  - pip
+  - scipy
+  - cftime
+  - numpy
+  - ipykernel
+prefix: /home/yuxuank/miniconda3/envs/siap
