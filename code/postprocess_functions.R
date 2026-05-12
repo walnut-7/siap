@@ -1,6 +1,6 @@
 library(doParallel)
 
-postprocess_func <- function(x_out, pre_par, x) {
+postprocess_func <- function(x_out, pre_par, x=NULL) {
   # Post-processing in a wrap. Consists of 3 steps:
   # 1. inverse normalization,
   # 2. inverse Box-Cox transformation, then minus b,
@@ -20,7 +20,11 @@ postprocess_func <- function(x_out, pre_par, x) {
                        function(i) inv_bc(x_out[i,], pre_par$bc_lambda_ls[i], pre_par$bc_b_ls[i])))
   }
   # ---------- cumulative sum -------------
-  x_imp <- t(sapply(1:nrow(x_diff), function(i) recover_from_diff(x_diff[i, ], x[i, ])))
+  if (pre_par$diff == T) {
+    x_imp <- t(sapply(1:nrow(x_diff), function(i) recover_from_diff(x_diff[i, ], x[i, ])))
+  } else {
+    x_imp <- x_diff
+  }
   return(x_imp)
 }
 

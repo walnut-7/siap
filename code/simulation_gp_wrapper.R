@@ -1,11 +1,11 @@
-gp.wrapper <- function(data, job, instance, covfun, ...) { 
+gp.wrapper <- function(data, job, instance, covfun, diff = F, ...) { 
   library(GpGp)
   source("code/preprocess_functions.R")
   source("code/postprocess_functions.R")
   
   x <- data
   x[instance] <- NA
-  pre_par <- preprocess_func(x, box.cox = F)
+  pre_par <- preprocess_func(x, diff = diff, box.cox = F)
   d1 <- nrow(x)
   d2 <- ncol(x)
   
@@ -84,7 +84,7 @@ gp.wrapper <- function(data, job, instance, covfun, ...) {
   
   ### ----------- spectral mrae-------------
   rr <- (x_pred - data)/data
-  mrae.w <- apply(rr[,S.test.w], 1, function(v) mean(abs(v)))
+  mrae.w <- apply(rr[,S.test.w,drop=F], 1, function(v) mean(abs(v)))
   
   mask.o <- matrix(NA, d1, d2)
   mask.o[S.test.o] <- 1
