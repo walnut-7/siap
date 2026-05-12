@@ -1,4 +1,4 @@
-siap.wrapper <- function(data, job, instance, p.cal, cp.alpha, ...) { 
+siap.wrapper <- function(data, job, instance, cp.alpha, ...) { 
   library(doParallel)
   library(Matrix)
   source("code/siap.R")

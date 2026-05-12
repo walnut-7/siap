@@ -40,8 +40,6 @@ method_shapes <- c(
   marss = 4   # cross
 )
 
-realdata_labels <- c(csim = paste0("CSIM*", round(csim_scale[i], 3)), siap = "SIAP",
-            gp = "GP", marss = "MARSS", tsis = "TSIS", tsis_baseline = "TSIS-baseline")
 realdata_colors <- c(csim = "purple", siap = "red",
             gp = "steelblue", marss = "gold2", tsis = "black", tsis_baseline = "darkgreen")
 

@@ -1,13 +1,14 @@
 source("code/read_data_functions.R")
 source("code/plot_functions.R")
+source("code/preprocess_functions.R")
+source("code/postprocess_functions.R")
+source("code/figure_config.R")
 
-library(dplyr)
+library(tidyr)
 library(ggplot2)
-library(ggbreak)
-library(scales)
-library(ggpubr)
 library(lubridate)
 library(tidyverse)
+library(patchwork)
 
 dl <- load_ssi(option = "true")
 x <- dl$x
@@ -114,35 +115,50 @@ rownames(si_imp) <- wvl
       si_q = sd(si, na.rm = TRUE)/sqrt(sum(!is.na(si)))
     )
   
+  write.table(rae_stats, file = "./output/realdata/rae_stats_traintest.csv", sep = "\t")
+
   long_stats <- rae_stats %>%
     pivot_longer(
       cols = starts_with("siap") | starts_with("gp") | starts_with("marss") | starts_with("si"),
       names_to = c("method", ".value"),
       names_pattern = "(.*)_(.*)"
     )
-  
-  p <- ggplot(long_stats, aes(x = method, y = mean, col = type)) +
-    geom_point(position = position_dodge(width = 0.5), size = 0.5) +  # Scatter points
-    geom_errorbar(aes(ymin = mean - q, ymax = mean + q),
-                  width = 0.2, position = position_dodge(width = 0.5)) +  # Error bars
-    labs(title = "", x = "Method", y = "MRAE margin w.r.t. naive mean") +
-    scale_color_manual(name = "Type", labels = c("scattered", "downtime"), values = c(2, 3)) +
-    theme_minimal(base_size = 14) +
-    theme(legend.position = "top")    # Place the legend at the top
-  
+  type_labels <- c(w = "downtime", o = "scattered")
+
+  p <- ggplot(long_stats, aes(x = method, y = mean, col = method, shape = method)) +
+    geom_point(position = position_dodge(width = 0.5), size = 2) +  # Scatter points
+    geom_errorbar(aes(ymin = mean - q, ymax = mean + q), size = 0.5,
+                  width = 0.3, position = position_dodge(width = 0.5)) +  # Error bars
+    labs(
+      x = "Missingness ratio",
+      y = "relative MRAE margin w.r.t. row-wise mean",
+      color = "Method"
+    ) +
+    facet_wrap(~type, nrow = 1, labeller = as_labeller(type_labels)) +
+    scale_color_manual(values = method_colors, labels = method_labels, name = "Method") +
+    scale_shape_manual(values = method_shapes, labels = method_labels, name = "Method") +
+    theme_minimal(base_size = 12) +
+    guides(color = guide_legend(byrow = TRUE, nrow = 1, title.position = "left")) +
+    theme(legend.position = "top") +
+    theme(
+      axis.text.y.right  = element_blank(),
+      axis.ticks.y.right = element_blank(),
+      axis.line.y.right  = element_blank(),
+      axis.title.y.right = element_blank()
+    )
+
   ggsave(paste0("./output/realdata/mrae_margin_to_mean_imputation.jpeg"), plot = p, width = 6, height = 4, dpi = 300)
 }
 
-# ------------ Table -------------
 ## ----------- runtime -------------
-{
-  siap.res$siap$fit1$time + siap.res$siap$fit2$time
-  gp.res$runtime$runtime.gp + gp.res$runtime$runtime.pred + gp.res$runtime$runtime.sims
-  as.numeric(sum(marss.res$runtime$runtime.marss) + sum(marss.res$runtime$runtime.boot), units = "mins")
-  as.numeric(si_runtime, units = "mins")
-}
+# {
+#   siap.res$siap$fit1$time + siap.res$siap$fit2$time
+#   gp.res$runtime$runtime.gp + gp.res$runtime$runtime.pred + gp.res$runtime$runtime.sims
+#   as.numeric(sum(marss.res$runtime$runtime.marss) + sum(marss.res$runtime$runtime.boot), units = "mins")
+#   as.numeric(si_runtime, units = "mins")
+# }
 
-## ---------- coverage --------------
+## ---------- UQ --------------
 {
   coverage_df <- data.frame(siap = c(siap.res$ave_coverage, siap.res$ave_coverage.w, siap.res$ave_coverage.o),
                             gp = c(gp.res$ave_coverage, gp.res$ave_coverage.w, gp.res$ave_coverage.o),
@@ -154,183 +170,13 @@ rownames(si_imp) <- wvl
   write.table(coverage_df, file = "./output/realdata/coverage_traintest.csv", sep = "\t")
 }
 
-## ------------- time series of a row ------------
-{
-  i = 200
-  x_coordinates = which(apply(siap.res$x, 2, function(t) all(is.na(t))))
-  siap_imp1 = siap_imp
-  siap_imp1[!is.na(siap.res$x)] = x[!is.na(siap.res$x)] # fill calibration set with observed values
-  jpeg(file=paste0("./output/realdata/timeseries.jpeg"), width=10, height=3, units = 'in', res = 300, pointsize=12)
-  plot(t, x[i,], type = "n", lty = 2, ylab = paste0("SSI, ", i, "-th row (", round(wvl[i],2), "nm)"), xlab = "Day")
-  for (j in seq_along(x_coordinates)) {
-    rect(xleft = t[x_coordinates[j]] - 0.5, xright = t[x_coordinates[j]] + 0.5, ybottom = min(x[i,],na.rm = T), ytop = max(x[i,],na.rm = T), col = "gray", border = NA)
-  } # downtime
-  lines(t,si_imp[i,], col = "violet")
-  lines(t,siap_imp1[i,], col = "red")
-  lines(t,marss_imp[i,], col = "lightgreen") 
-  lines(t,gp_imp[i,], col = "lightblue")
-  lines(t,x[i,])
-  legend("topleft", lty = 1, col = c("red", "lightgreen", "lightblue", "violet"), legend = c("SIAP", "MARSS", "GP", "SoftImpute-ALS"))
-  dev.off()
-}
-
-## ---------- snapshot of reconstruction result -------------
-{  
-  zlim = range(c(x,
-                 siap.res$siap$fit2$x_imp,
-                 gp.res$x_pred,
-                 marss.res$x_pred), na.rm=T)
-  
-  jpeg(file=paste0("./output/realdata/snapshot.jpeg"), width=20, height=12, units = 'in', res = 100, pointsize=16)
-  par(mfrow = c(2, 2), mar = c(3,5,5,8))
-  panel_image(x, yleg = wvl, xlab = "", xleg = t, title = "TSIS-1 SSI Observations", zlim = zlim, legend.strip = F)
-  panel_image(siap.res$siap$fit2$x_imp, yleg = wvl, xlab = "", xleg = t, title = "SIAP", zlim = zlim, legend.strip = F)
-  panel_image(gp.res$x_pred, yleg = wvl, xlab = "", xleg = t, title = "GP", zlim = zlim, legend.strip = F)
-  panel_image(marss.res$x_pred, yleg = wvl, xlab = "", xleg = t, title = "MARSS", zlim = zlim, legend.strip = F)
-  image.plot(legend.only = TRUE, zlim = zlim, col = tim.colors(), legend.args = list(text = expression("Irradiance" ~ "[" * mW ~ m^{-2} * nm^{-1} * "]" ), side = 1, line = 2), legend.mar = 1, horizontal = F)
-  #dev.copy(png, file=paste0("./test9/example_", 10*pdt, ".png"), width=20, height=20, units = 'in', res = 300, pointsize=10)
-  dev.off()
-}
-
-## --------- snapshot of half interval width ---------------
-{
-  gp_q <- gp.res$x_sd * qnorm(0.975)
-  marss_q <- marss.res$x_sd * qnorm(0.975)
-  
-  jpeg(file=paste0("./output/realdata/snapshot_q.jpeg"), width=15, height=4, units = 'in', res = 300, pointsize=12)
-  layout(matrix(1:3, nrow = 1), widths = c(1, 1, 1))
-  par(mar = c(3,4,4,8))
-  panel_image(siap_q, yleg = wvl, xlab = "", xleg = t, title = "SIAP", legend = expression("[" * mW ~ m^{-2} * nm^{-1} * "]" ), legend.mar = 5, legend.side = 1)
-  panel_image(gp_q, yleg = wvl, xlab = "", xleg = t, title = "GP", legend = expression("[" * mW ~ m^{-2} * nm^{-1} * "]" ), legend.mar = 5, legend.side = 1)
-  #par(mar = c(3,4,4,8))
-  panel_image(marss_q, yleg = wvl, xlab = "", xleg = t, title = "MARSS", legend = expression("[" * mW ~ m^{-2} * nm^{-1} * "]" ), legend.mar = 5, legend.side = 1)
-  #image.plot(legend.only = TRUE, zlim = range(marss_q), col = tim.colors(), legend.args = list(text = expression("[" * mW ~ m^{-2} * nm^{-1} * "]" ), side = 1, line = 2), legend.mar = 1, horizontal = F)
-  dev.off()
-}
-
-## --------- snapshot of sd ---------------
-{
-  gp_sd <- gp.res$x_sd
-  marss_sd <- marss.res$x_sd
-  
-  zlim = range(c(siap_q/qnorm(0.975), gp_sd, marss_sd))
-  
-  jpeg(file=paste0("./output/realdata/snapshot_sd.jpeg"), width=15, height=4, units = 'in', res = 300, pointsize=12)
-  layout(matrix(1:3, nrow = 1), widths = c(1, 1, 1.3))
-  par(mar = c(3,4,4,1))
-  panel_image(siap_q/qnorm(0.975), yleg = wvl, xlab = "", xleg = t, title = "SIAP", zlim = zlim, legend.strip = F)
-  panel_image(gp_sd, yleg = wvl, xlab = "", xleg = t, title = "GP", zlim = zlim, legend.strip = F)
-  par(mar = c(3,4,4,8))
-  panel_image(marss_sd, yleg = wvl, xlab = "", xleg = t, title = "MARSS", zlim = zlim, legend.strip = F)
-  image.plot(legend.only = TRUE, zlim = zlim, col = tim.colors(), legend.args = list(text = expression("[" * mW ~ m^{-2} * nm^{-1} * "]" ), side = 1, line = 2), legend.mar = 1, horizontal = F)
-  dev.off()
-}
-
-## ------ daily relative percentage difference in test set -------
-### downtime
-{
-  j = 724 # 2020-03-06
-  
-  r.siap = (siap_imp[,j] - x[,j])/x[,j]*100
-  r.gp = (gp_imp[,j] - x[,j])/x[,j]*100
-  r.marss = (marss_imp[,j] - x[,j])/x[,j]*100
-  
-  df_low = data.frame(
-    wvl = wvl[wvl<400],
-    siap = r.siap[wvl<400],
-    gp = r.gp[wvl<400],
-    marss = r.marss[wvl<400]
-  )
-  
-  df_low <- pivot_longer(df_low, cols = c(siap, gp, marss), 
-                         names_to = "method", 
-                         values_to = "r")
-  p <- ggplot(df_low, aes(x = wvl, y = r, color = method, fill = method)) +
-    geom_line() +  # Line for mean values
-    scale_x_log10() +
-    geom_hline(yintercept = 0, linetype = "dashed", color = "black") +  # Horizontal line at y=0
-    labs(x = "Wavelength[nm]", y = "[%]", title = paste0("Relative % Difference from TSIS, ", t[j])) +
-    theme_minimal() +
-    ylim(-1, 1)
-  ggsave(paste0("./output/realdata/test_", t[j], "_low.jpeg"), plot = p, width = 6, height = 2, dpi = 300)
-  
-  df_high = data.frame(
-    wvl = wvl[wvl>=400],
-    siap = r.siap[wvl>=400],
-    gp = r.gp[wvl>=400],
-    marss = r.marss[wvl>=400]
-  )
-  
-  df_high <- pivot_longer(df_high, cols = c(siap, gp, marss), 
-                          names_to = "method", 
-                          values_to = "r")
-  p <- ggplot(df_high, aes(x = wvl, y = r, color = method, fill = method)) +
-    geom_line() +  # Line for mean values
-    scale_x_log10() +
-    geom_hline(yintercept = 0, linetype = "dashed", color = "black") +  # Horizontal line at y=0
-    labs(x = "Wavelength[nm]", y = "[%]", title ="") +
-    theme_minimal() +
-    ylim(-0.5, 0.5)
-  
-  ggsave(paste0("./output/realdata/test_", t[j], "_high.jpeg"), plot = p, width = 6, height = 2, dpi = 300)
-}
-
-### scattered
-{
-  j = siap.res$S.test.o[1,"col"] # 2018-03-14
-  
-  r.siap = (siap_imp[,j] - x[,j])/x[,j]*100
-  r.gp = (gp_imp[,j] - x[,j])/x[,j]*100
-  r.marss = (marss_imp[,j] - x[,j])/x[,j]*100
-  
-  df_low = data.frame(
-    wvl = wvl[wvl<400],
-    siap = r.siap[wvl<400],
-    gp = r.gp[wvl<400],
-    marss = r.marss[wvl<400]
-  )
-  
-  df_low <- pivot_longer(df_low, cols = c(siap, gp, marss), 
-                         names_to = "method", 
-                         values_to = "r")
-  p <- ggplot(df_low, aes(x = wvl, y = r, color = method, fill = method)) +
-    geom_line() +  # Line for mean values
-    scale_x_log10() +
-    geom_hline(yintercept = 0, linetype = "dashed", color = "black") +  # Horizontal line at y=0
-    labs(x = "Wavelength[nm]", y = "[%]", title = paste0("Relative % Difference from TSIS, ", t[j])) +
-    theme_minimal() +
-    ylim(-0.5, 0.5)
-  ggsave(paste0("./output/realdata/test_", t[j], "_low.jpeg"), plot = p, width = 6, height = 2, dpi = 300)
-  
-  df_high = data.frame(
-    wvl = wvl[wvl>=400],
-    siap = r.siap[wvl>=400],
-    gp = r.gp[wvl>=400],
-    marss = r.marss[wvl>=400]
-  )
-  
-  df_high <- pivot_longer(df_high, cols = c(siap, gp, marss), 
-                          names_to = "method", 
-                          values_to = "r")
-  p <- ggplot(df_high, aes(x = wvl, y = r, color = method, fill = method)) +
-    geom_line() +  # Line for mean values
-    scale_x_log10() +
-    geom_hline(yintercept = 0, linetype = "dashed", color = "black") +  # Horizontal line at y=0
-    labs(x = "Wavelength[nm]", y = "[%]", title = "") +
-    theme_minimal() +
-    ylim(-0.5, 0.5)
-  
-  ggsave(paste0("./output/realdata/test_", t[j], "_high.jpeg"), plot = p, width = 6, height = 2, dpi = 300)
-}
-
-## --------- compare with csim ssi ------------
+## --------- band-integrated ssi ------------
 ### helpers function
 {
   integrate_ssi <- function(ssi) {
     # - ssi: Matrix. Row names must be the wavelength
-    # No missing values should be in the input data
     wvl <- as.numeric(rownames(ssi))
-    area <- colSums((ssi[-1,,drop=F] + ssi[-nrow(ssi),,drop=F]) * (wvl[-1] - wvl[-length(wvl)]) / 2, )
+    area <- colSums((ssi[-1,,drop=F] + ssi[-nrow(ssi),,drop=F]) * (wvl[-1] - wvl[-length(wvl)]) / 2)
     area <- matrix(area, 1)
     rownames(area) <- paste0(round(range(wvl),1), collapse = "~")
     colnames(area) <- colnames(ssi)
@@ -340,13 +186,13 @@ rownames(si_imp) <- wvl
   binned <- function(ssi) {
     wvl <- as.numeric(rownames(ssi))
     rbind(
-      integrate_ssi(ssi[which(wvl>210)[1]:which(wvl>300)[1],]) / 1000,
-      integrate_ssi(ssi[which(wvl>300)[1]:which(wvl>400)[1],]) / 1000,
-      integrate_ssi(ssi[which(wvl>700)[1]:which(wvl>1000)[1],]) / 1000,
-      integrate_ssi(ssi[which(wvl>1000)[1]:which(wvl>1300)[1],]) / 1000
+      integrate_ssi(ssi[which(wvl>210)[1]:which(wvl>300)[1], , drop=F]) / 1000,
+      integrate_ssi(ssi[which(wvl>300)[1]:which(wvl>400)[1], , drop=F]) / 1000,
+      integrate_ssi(ssi[which(wvl>400)[1]:which(wvl>700)[1], , drop=F]) / 1000,
+      integrate_ssi(ssi[which(wvl>700)[1]:which(wvl>1000)[1], , drop=F]) / 1000,
+      integrate_ssi(ssi[which(wvl>1000)[1]:which(wvl>=2399)[1], , drop=F]) / 1000
     )
   }
-  
 }
 
 {
@@ -355,19 +201,16 @@ rownames(si_imp) <- wvl
   t_csim = ymd(colnames(csim))
   t_csim <- as.character(t_csim)
   wvl_csim = as.numeric(rownames(csim))
-  
   csim_uniq <- matrix(NA, nrow = nrow(csim), ncol = length(unique(t_csim)))
   colnames(csim_uniq) <- unique(t_csim)
   rownames(csim_uniq) <- wvl_csim
   for (i in unique(t_csim)) {
     csim_uniq[, i] <- rowMeans(csim[, which(t_csim == i), drop = F], na.rm = T)
   }
-  
   csim_match <- matrix(NA, nrow = length(wvl), ncol = ncol(csim_uniq))
   for (j in 1:ncol(csim_uniq)) {
     csim_match[,j] <- approx(wvl_csim, csim_uniq[,j], wvl)$y # linear interpolation
   }
-  
   t_csim <- unique(t_csim)
   colnames(csim_match) <- as.character(t_csim)
   rownames(csim_match) <- wvl
@@ -378,48 +221,59 @@ rownames(si_imp) <- wvl
   siap_imp1 = siap_imp
   siap_imp1[!is.na(siap.res$x)] = x[!is.na(siap.res$x)] # fill calibration set with observed values
   binned_siap <- binned(siap_imp1)
-  
+
   binned_siap_q <- sqrt(binned((siap_q/qnorm(0.975))^2)) * qnorm(0.975)
-  
+
   binned_gp <- binned(gp_imp)
-  
-  x_sims <- gp.res$x_sims
-  rownames(x_sims) <- wvl
-  binned_gp_sims <- array(dim=c(4, ncol(x), dim(x_sims)[3]))
-  for (i in 1:dim(x_sims)[3]) {
-    binned_gp_sims[,,i] <- binned(x_sims[,,i])
+
+  binned_gp_sims <- array(dim=c(5, ncol(x), dim(gp_sims)[3]))
+  for (i in 1:dim(gp_sims)[3]) {
+    binned_gp_sims[,,i] <- binned(gp_sims[,,i])
   }
   binned_gp_intervals <- apply(binned_gp_sims, c(1,2), quantile, probs = c(0.025,0.975), na.rm = T)
   dimnames(binned_gp_intervals) <- list(
     rows = c("low", "high"),
-    cols = c("210~300.1", "300.1~400.2",  "701.1~1002.9", "1002.9~1304.2"),
+    cols = c("210~300.1", "300.1~400.2", "400.2~701.1", "701.1~1002.9", "1002.9~2399.0"),
     slices = colnames(x)
   )
-  
+
   gp_q <- gp.res$x_sd * qnorm(0.975)
   marss_q <- marss.res$x_sd * qnorm(0.975)
-  
+
   rownames(gp_q) <- wvl
   binned_gp_q <- binned(gp_q)
-  
+
   binned_marss <- binned(marss_imp)
-  
+
   rownames(marss_q) <- wvl
-  binned_marss_q <- binned(marss_q) # conservative
-  
+  binned_marss_q <- binned(marss_q) 
+
+  # --------- tsis
   binned_tsis <- binned(x)
-  
-  binned_csim <- matrix(NA,4,ncol(x))
-  rownames(binned_csim) <- c("210~300.1", "300.1~400.2",  "701.1~1002.9", "1002.9~1304.2")
+
+  # -------- csim
+  binned_csim <- matrix(NA,5,ncol(x))
+  rownames(binned_csim) <- c("210~300.1", "300.1~400.2", "400.2~701.1", "701.1~1002.9", "1002.9~2399.0")
   colnames(binned_csim) <- colnames(x)
   binned_csim[,t_csim] <- binned(csim_uniq)
+
+  # ---------- baseline
+  pre_par <- preprocess_func(x, box.cox = F)
+  x_ready <- pre_par$x_ready
+  x_bsl <- x_ready
+  x_bsl[which(is.na(x_ready), arr.ind = T)] <- pre_par$nmlz_mu[which(is.na(x_ready), arr.ind = T)[, 1]]
+  x_bsl <- postprocess_func(x_bsl, pre_par = pre_par, x)
+  rownames(x_bsl) <- wvl
+  colnames(x_bsl) <- colnames(x)
+  binned_baseline <- binned(x_bsl)
+
 }
 
 ### scale csim
 {
-  wvl_ranges_ls <- list(c(210,300), c(300,400), c(700,1000), c(1000,1300))
-  csim_scale <- rep(NA, 4)
-  
+  wvl_ranges_ls <- list(c(210,300), c(300,400), c(400, 700), c(700,1000), c(1000,2400))
+  csim_scale <- rep(NA, 5)
+
   for (i in 1:length(wvl_ranges_ls)) {
     wvl_range <- wvl_ranges_ls[[i]]
     csim_irradiance <- integrate_ssi(csim_uniq[which(wvl_csim>wvl_range[1])[1]:which(wvl_csim>wvl_range[2])[1],]) / 1000
@@ -431,105 +285,336 @@ rownames(si_imp) <- wvl
 
 ### -------- binned ssi comparison ----------
 {
-  for (i in 1:4) {
+  highlight_points <- t[which(apply(siap.res$x, 2, function(v) all(is.na(v))))]
+  full_t <- # t %>% as.character()
+    # seq.Date(min(ymd(t_csim)), max(ymd(t_csim)), by = "day") %>% as.character()
+    seq.Date(t[1], max(ymd(t_csim)), by = "day") %>% as.character()
+
+  align_to_full_t <- function(values) {
+    out <- rep(NA_real_, length(full_t))
+    out[match(t_csim, full_t)] <- as.numeric(values)
+    out
+  }
+
+  make_binned_panel <- function(i, show_missing_points = FALSE) {
     df <- data.frame(
-      t = t_csim,
-      tsis = binned_tsis[i,t_csim],
-      siap = binned_siap[i,t_csim],
-      siap_low = binned_siap[i,t_csim] - binned_siap_q[i,t_csim],
-      siap_high = binned_siap[i,t_csim] + binned_siap_q[i,t_csim],
-      gp = binned_gp[i,t_csim],
-      gp_low = binned_gp_intervals[1,i,t_csim],
-      gp_high = binned_gp_intervals[2,i,t_csim],
-      marss = binned_marss[i,t_csim],
-      marss_low = binned_marss[i,t_csim] - binned_marss_q[i,t_csim],
-      marss_high = binned_marss[i,t_csim] + binned_marss_q[i,t_csim],
-      csim = binned_csim[i,t_csim] * csim_scale[i]
+      t = full_t %>% as.Date(),
+      tsis = binned_tsis[i, full_t],
+      tsis_baseline = binned_baseline[i, full_t],
+      siap = binned_siap[i, full_t],
+      siap_low = binned_siap[i, full_t] - binned_siap_q[i, full_t],
+      siap_high = binned_siap[i, full_t] + binned_siap_q[i, full_t],
+      gp = binned_gp[i, full_t],
+      gp_low = binned_gp_intervals[1, i, full_t],
+      gp_high = binned_gp_intervals[2, i, full_t],
+      marss = binned_marss[i, full_t],
+      marss_low = binned_marss[i, full_t] - binned_marss_q[i, full_t],
+      marss_high = binned_marss[i, full_t] + binned_marss_q[i, full_t],
+      csim = binned_csim[i, full_t] * csim_scale[i]
     )
     
     df <- df %>%
       pivot_longer(
-        cols = c("csim", "siap", "gp", "marss","tsis"), 
-        names_to = "method", 
+        cols = c("csim", "siap", "gp", "marss", "tsis", "tsis_baseline"),
+        names_to = "method",
         values_to = "y"
       ) %>%
       mutate(
-        low = if_else(method == "gp", gp_low, 
-                      if_else(method == "marss", marss_low, 
-                              if_else(method == "siap", siap_low, NA))), 
-        high = if_else(method == "gp", gp_high, 
-                       if_else(method == "marss", marss_high, 
-                               if_else(method == "siap", siap_high, NA)))  
+        low = if_else(method == "gp", gp_low,
+                      if_else(method == "marss", marss_low,
+                              if_else(method == "siap", siap_low, NA))),
+        high = if_else(method == "gp", gp_high,
+                      if_else(method == "marss", marss_high,
+                              if_else(method == "siap", siap_high, NA)))
       )
-    labels <- c(csim = paste0("CSIM*", round(csim_scale[i], 3)), siap = "SIAP",
-                gp = "GP", marss = "MARSS", tsis = "TSIS")
-    colors <- c(csim = "black", tsis = "grey", gp = "#619CFF", marss = "#B79F00", siap = "#F8766D")
+    
+    realdata_labels <- c(csim = paste0("CSIM*", round(csim_scale[i], 3)), siap = "SIAP",
+            gp = "GP", marss = "MARSS", tsis = "TSIS", tsis_baseline = "TSIS-baseline")
+
     p <- ggplot(df, aes(x = t, y = y, group = method)) +
-      geom_line(aes(color = method)) +  # Line for mean values
-      # geom_hline(yintercept = 0, linetype = "dashed", color = "black") +  # Horizontal line at y=0
-      geom_ribbon(data = subset(df, method != "tsis" & method != "csim"), aes(ymin = low, ymax = high, fill = method), alpha = 0.2) +
-      labs(title = c("210-300nm", "300-400nm", "700-1000nm", "1000-1300nm")[i],
-           x = "Date (YYYY-MM-DD)", y = expression(Irradiance ~ "(" * mW ~ m^{-2} * ")"), color = "Method", fill = "Uncertainties") +
-      scale_color_manual(values = colors, labels = labels) +
-      scale_fill_manual(values = colors, labels = labels) +
-      scale_x_discrete(breaks = c("2019-03-27", "2019-05-27", "2019-07-27", "2019-09-27", "2019-11-27")) +
+      geom_line(aes(color = method)) +
+      geom_ribbon(
+        data = subset(df, method %in% c("gp", "marss", "siap")),
+        aes(ymin = low, ymax = high, fill = method),
+        alpha = 0.2
+      ) +
+      labs(
+        title = c("210-300nm", "300-400nm", "400-700nm", "700-1000nm", "1000-2400nm")[i],
+        x = "Date (YYYY-MM-DD)",
+        y = expression(Irradiance ~ "(" * W ~ m^{-2} * ")"),
+        color = "Method",
+        fill = "Uncertainties"
+      ) +
+      scale_color_manual(values = realdata_colors, labels = realdata_labels) +
+      scale_fill_manual(values = realdata_colors, labels = realdata_labels) +
+      scale_x_date(
+        breaks = as.Date(c("2019-03-27", "2019-05-27", "2019-07-27", "2019-09-27", "2019-11-27")),
+        date_labels = "%Y-%m-%d"
+      ) +
       theme_minimal() +
       guides(fill = "none")
+    
+    if (show_missing_points) {
+      p <- p + geom_point(
+        data = df %>% filter(t %in% highlight_points),
+        aes(x = t, y = y, color = method),
+        size = 1,
+        stroke = 0.5
+      )
+    }
+    
+    p
+  }
+
+
+  for (i in 1:5) {
+    p <- make_binned_panel(i, show_missing_points = FALSE)
     ggsave(paste0("./output/realdata/binned_traintest_",i,"_.jpeg"), plot = p, width = 6, height = 3, dpi = 300)
   }
 }
 
-### -------- binned ssi comparison (zoomed in) ----------
+### -------- binned ssi comparison (combined) ----------
 {
-  for (i in 1:4) {
-    highlight_points <- t[which(apply(siap.res$x, 2, function(v) all(is.na(v))))]
+  highlight_points <- t[which(apply(siap.res$x, 2, function(v) all(is.na(v))))]
+  full_t <- seq.Date(t[1], t[500], by = "day") %>% as.character()
+
+  align_to_full_t <- function(values) {
+    out <- rep(NA_real_, length(full_t))
+    out[match(t_csim, full_t)] <- as.numeric(values)
+    out
+  }
+
+  make_binned_panel <- function(i, show_missing_points = FALSE) {
     df <- data.frame(
-      t = t_csim,
-      tsis = binned_tsis[i,t_csim],
-      siap = binned_siap[i,t_csim],
-      siap_low = binned_siap[i,t_csim] - binned_siap_q[i,t_csim],
-      siap_high = binned_siap[i,t_csim] + binned_siap_q[i,t_csim],
-      gp = binned_gp[i,t_csim],
-      gp_low = binned_gp_intervals[1,i,t_csim],
-      gp_high = binned_gp_intervals[2,i,t_csim],
-      marss = binned_marss[i,t_csim],
-      marss_low = binned_marss[i,t_csim] - binned_marss_q[i,t_csim],
-      marss_high = binned_marss[i,t_csim] + binned_marss_q[i,t_csim],
-      csim = binned_csim[i,t_csim] * csim_scale[i]
+      t = full_t %>% as.Date(),
+      tsis = binned_tsis[i, full_t],
+      siap = binned_siap[i, full_t],
+      siap_low = binned_siap[i, full_t] - binned_siap_q[i, full_t],
+      siap_high = binned_siap[i, full_t] + binned_siap_q[i, full_t],
+      gp = binned_gp[i, full_t],
+      gp_low = binned_gp_intervals[1, i, full_t],
+      gp_high = binned_gp_intervals[2, i, full_t],
+      marss = binned_marss[i, full_t],
+      marss_low = binned_marss[i, full_t] - binned_marss_q[i, full_t],
+      marss_high = binned_marss[i, full_t] + binned_marss_q[i, full_t],
+      csim = binned_csim[i, full_t] * csim_scale[i]
     )
+    
     df <- df %>%
       pivot_longer(
-        cols = c("csim", "siap", "gp", "marss","tsis"), 
-        names_to = "method", 
+        cols = c("csim", "siap", "gp", "marss", "tsis"),
+        names_to = "method",
         values_to = "y"
       ) %>%
       mutate(
-        low = if_else(method == "gp", gp_low, 
-                      if_else(method == "marss", marss_low, 
-                              if_else(method == "siap", siap_low, NA))), 
-        high = if_else(method == "gp", gp_high, 
-                       if_else(method == "marss", marss_high, 
-                               if_else(method == "siap", siap_high, NA)))  
+        low = if_else(method == "gp", gp_low,
+                      if_else(method == "marss", marss_low,
+                              if_else(method == "siap", siap_low, NA))),
+        high = if_else(method == "gp", gp_high,
+                      if_else(method == "marss", marss_high,
+                              if_else(method == "siap", siap_high, NA)))
       )
-    labels <- c(csim = paste0("CSIM*", round(csim_scale[i], 3)), siap = "SIAP",
-                gp = "GP", marss = "MARSS", tsis = "TSIS")
-    colors <- c(csim = "black", tsis = "grey", gp = "#619CFF", marss = "#B79F00", siap = "#F8766D")
+    realdata_labels <- c(csim = paste0("CSIM*", round(csim_scale[i], 3)), siap = "SIAP",
+            gp = "GP", marss = "MARSS", tsis = "TSIS", tsis_baseline = "TSIS-baseline")
     p <- ggplot(df, aes(x = t, y = y, group = method)) +
-      geom_line(aes(color = method)) +  # Line for mean values
-      # geom_hline(yintercept = 0, linetype = "dashed", color = "black") +  # Horizontal line at y=0
-      geom_ribbon(data = subset(df, method != "tsis" & method != "csim"), aes(ymin = low, ymax = high, fill = method), alpha = 0.2) +
-      labs(title = c("210-300nm", "300-400nm", "700-1000nm", "1000-1300nm")[i],
-           x = "Date (YYYY-MM-DD)", y = expression(Irradiance ~ "(" * mW ~ m^{-2} * ")"), color = "Method", fill = "Uncertainties") +
-      scale_color_manual(values = colors, labels = labels) +
-      scale_fill_manual(values = colors, labels = labels) +
-      scale_x_discrete(breaks = c("2019-03-27", "2019-05-27", "2019-07-27", "2019-09-27", "2019-11-27")) +
+      geom_ribbon(
+        data = subset(df, method != "tsis" & method != "csim"),
+        aes(ymin = low, ymax = high, fill = method),
+        alpha = 0.2
+      ) +
+      geom_line(data = subset(df, method != "csim"), aes(color = method)) +
+      geom_line(data = subset(df, method == "csim"), aes(color = method)) +
+      labs(
+        title = c("210-300nm", "300-400nm", "400-700nm", "700-1000nm", "1000-2400nm")[i],
+        x = "Date (YYYY-MM-DD)",
+        y = expression(Irradiance ~ "(" * W ~ m^{-2} * ")"),
+        color = "Method",
+        fill = "Uncertainties"
+      ) +
+      scale_color_manual(values = realdata_colors, labels = realdata_labels) +
+      scale_fill_manual(values = realdata_colors, labels = realdata_labels) +
+      scale_x_date(
+        breaks = as.Date(c("2018-03-27", "2018-09-27", "2019-03-27", "2019-09-27")),
+        date_labels = "%Y-%m-%d"
+      ) +
       theme_minimal() +
-      guides(fill = "none") +
-      geom_point(data = df %>% filter(t %in% highlight_points), 
-                 aes(x = t, y = y, color = method), 
-                 size = 1, stroke = 0.5)  # Increase size for emphasis
-    ggsave(paste0("./output/realdata/binned_traintest_",i,"_large.jpeg"), plot = p, width = 12, height = 3, dpi = 300)
+      theme(plot.title = element_text(size = 9, face = "bold")) +
+      guides(fill = "none")
+
+    if (show_missing_points) {
+      pts <- df %>% filter(t %in% highlight_points)
+      p <- p +
+        geom_point(
+          data = subset(pts, method != "csim"),
+          aes(x = t, y = y, color = method),
+          size = 1,
+          stroke = 0.5
+        ) +
+        geom_point(
+          data = subset(pts, method == "csim"),
+          aes(x = t, y = y, color = method),
+          size = 1,
+          stroke = 0.5
+        )
+    }
+
+    p
   }
+
+  p1 <- make_binned_panel(1, show_missing_points = FALSE)
+  p3 <- make_binned_panel(3, show_missing_points = FALSE)
+  p4 <- make_binned_panel(4, show_missing_points = FALSE)
+  p5 <- make_binned_panel(5, show_missing_points = FALSE)
+  p2 <- make_binned_panel(2, show_missing_points = TRUE)
+
+  p1 <- p1 + labs(x = NULL)
+  p3 <- p3 + labs(x = NULL, y = NULL)
+  p5 <- p5 + labs(x = NULL, y = NULL)
+  p4 <- p4 + labs(x = NULL)
+
+  p_combined <- ((p1 + theme(legend.position = "none")) + (p3 + theme(legend.position = "none"))) /
+    ((p4 + theme(legend.position = "none")) + (p5 + theme(legend.position = "none"))) /
+    (p2 + theme(legend.position = "bottom"))
+
+  ggsave("./output/realdata/binned_traintest_combined.jpeg", plot = p_combined, width = 8, height = 6, dpi = 300)
+}
+
+### ------- gp raw ------
+{
+  x_tr <- gp.res$x
+  pre_par_tr <- preprocess_func(x_tr, box.cox = F)
+  x_df <- data.frame(
+    row = rep(1:nrow(pre_par_tr$x_ready), times = ncol(pre_par_tr$x_ready)),
+    col = rep(1:ncol(pre_par_tr$x_ready), each = nrow(pre_par_tr$x_ready)),
+    value = as.vector(pre_par_tr$x_ready)
+  )
+  is_missing <- is.na(x_df$value)
+  obs_and_pred <- x_df$value
+  obs_and_pred[is_missing] <- gp.res$pred
+  x_pred_raw <- array(obs_and_pred, c(nrow(pre_par_tr$x_ready), ncol(pre_par_tr$x_ready)))
+  rownames(x_pred_raw) <- wvl
+  binned_raw <- binned(x_pred_raw)
+  colnames(binned_raw) <- colnames(x_ready)
+
+  locs <- cbind(x_df$row, x_df$col)
+  z <- matrix(rep(1, d2), ncol = 1) # n x 1
+  exog <- z %*% gp.res$gp$betahat
+  exog <- array(exog, c(nrow(pre_par_tr$x_ready), ncol(pre_par_tr$x_ready)))
+  rownames(exog) <- wvl
+  colnames(exog) <- colnames(x_ready)
+  binned_exog <- binned(exog)
+
+  pre_par <- preprocess_func(x, box.cox = F)
+  x_ready <- pre_par$x_ready
+  binned_tsis_preprocess <- binned(x_ready)
+
+  i <- 2
+
+  t_grid <- # colnames(x_ready)
+    seq.Date(min(ymd(t_csim)), max(ymd(t_csim)), by = "day") %>% as.character()
+  df <- data.frame(
+    t = t_grid %>% as.Date(),
+    tsis_preprocess = binned_tsis_preprocess[i, t_grid],
+    exog = binned_exog[i, t_grid],
+    gp_raw = binned_raw[i, t_grid]
+    )
+
+  df <- df %>%
+    pivot_longer(
+      cols = c("tsis_preprocess", "gp_raw", "exog"),
+      names_to = "method",
+      values_to = "y"
+    ) %>%
+    mutate(method = recode(method,
+      tsis_preprocess = "tsis",
+      gp_raw = "gp"
+    ))
+
+  plot_colors <- c(realdata_colors[c("tsis", "gp")], exog = "darkorange")
+  plot_labels <- c(gp = "GP", tsis = "TSIS", exog = "Mean estimate of GP")
+  band_titles <- c("210-300nm", "300-400nm", "400-700nm", "700-1000nm", "1000-2400nm")
+
+  highlight_points <- colnames(pre_par_tr$x_ready)[apply(pre_par_tr$x_ready, 2, function(v) all(is.na(v)))]
+  highlight_points <- intersect(highlight_points, t_grid)
+  df_missing <- data.frame(
+    t = as.Date(highlight_points),
+    y = binned_raw[i, highlight_points],
+    method = "gp"
+  )
+
+  p <- ggplot(df, aes(x = t, y = y, color = method)) +
+    geom_line(linewidth = 0.8, na.rm = TRUE) +
+    geom_point(data = df_missing, aes(x = t, y = y, color = method),
+              shape = 16, size = 1.5, inherit.aes = FALSE) +
+    scale_color_manual(values = plot_colors, labels = plot_labels) +
+    scale_x_date(
+      breaks = as.Date(c("2019-03-27", "2019-05-27", "2019-07-27", "2019-09-27", "2019-11-27")),
+      date_labels = "%b %Y"
+    ) +
+    labs(
+      title = band_titles[i],
+      x = "Date",
+      y = "Preprocessed irradiance",
+        # expression(Delta ~ Irradiance ~ "(standardized)"),
+      color = "Method"
+    ) +
+    theme_bw() +
+    theme(
+      legend.position = "bottom",
+      axis.text.x = element_text(angle = 30, hjust = 1),
+      plot.title = element_text(face = "bold", hjust = 0.5)
+    )
+
+  ggsave(paste0("./output/realdata/binned_gp_raw_",i , ".jpeg"), plot = p, width = 8, height = 4, dpi = 300)
+}
+
+### -------- downtime missingess type summary -------
+{
+  t_grid <- colnames(x_ready)
+  binned_tsis_preprocess <- binned(x_ready)
+
+  hp_dates <- sort(as.Date(highlight_points))
+  t_dates <- as.Date(t_grid)
+
+  gaps <- c(TRUE, diff(hp_dates) > 1)
+  chunks_tbl <- data.frame(date = hp_dates, chunk = cumsum(gaps)) %>%
+    group_by(chunk) %>%
+    summarise(start = min(date), end = max(date), .groups = "drop") %>%
+    mutate(width = as.integer(end - start) + 1L)
+
+  # for each band, classify each chunk by the sign of its flanking observed values
+  chunk_summary <- lapply(1:5, function(i) {
+    classify_chunk <- function(start, end) {
+      left_t  <- as.character(t_dates[t_dates < start])
+      right_t <- as.character(t_dates[t_dates > end])
+      left_cands  <- left_t[!is.na(binned_tsis_preprocess[i, left_t])]
+      right_cands <- right_t[!is.na(binned_tsis_preprocess[i, right_t])]
+      if (length(left_cands) == 0 || length(right_cands) == 0) return(NA_character_)
+      lv <- binned_tsis_preprocess[i, left_cands[length(left_cands)]]
+      rv <- binned_tsis_preprocess[i, right_cands[1]]
+      if (is.na(lv) || is.na(rv)) return(NA_character_)
+      if (lv > 0 && rv > 0) "pos-pos"
+      else if (lv < 0 && rv < 0) "neg-neg"
+      else "neg-pos"
+    }
+    types <- mapply(classify_chunk, chunks_tbl$start, chunks_tbl$end)
+    widths <- chunks_tbl$width
+    n <- length(types)
+    valid <- !is.na(types)
+    w_tot <- sum(widths[valid])
+    data.frame(
+      i = i,
+      n_chunks = n,
+      prop_pos_pos = sum(types == "pos-pos", na.rm = TRUE) / n,
+      prop_neg_neg = sum(types == "neg-neg", na.rm = TRUE) / n,
+      prop_neg_pos = sum(types == "neg-pos", na.rm = TRUE) / n,
+      wprop_pos_pos = sum(widths[types == "pos-pos" & valid]) / w_tot,
+      wprop_neg_neg = sum(widths[types == "neg-neg" & valid]) / w_tot,
+      wprop_neg_pos = sum(widths[types == "neg-pos" & valid]) / w_tot
+    )
+  }) %>% bind_rows()
+
+  write.csv(chunk_summary, file = "output/realdata/chunk_summary.csv")
 }
 
 ## ---------- hyperparametr tuning result ----------

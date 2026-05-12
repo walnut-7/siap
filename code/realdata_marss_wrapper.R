@@ -1,4 +1,5 @@
-marss.wrapper = function(data, job, instance, model, p, r,...) {
+marss.wrapper = function(data, job, instance, model, p, r, diff = T, ...) {
+  library(GpGp)
   source("code/preprocess_functions.R")
   source("code/postprocess_functions.R")
   source("code/marss_model_specification.R")
@@ -7,7 +8,7 @@ marss.wrapper = function(data, job, instance, model, p, r,...) {
   x[instance$miss] <- NA
   x_big <- x
   x <- x[instance$div, , drop = F]
-  pre_par <- preprocess_func(x, box.cox = F)
+  pre_par <- preprocess_func(x, diff = diff, box.cox = F)
   x_work <- pre_par$x_ready
   d1 <- nrow(pre_par$x_ready)
   d2 <- ncol(pre_par$x_ready)

@@ -1,8 +1,8 @@
 library(batchtools)
+library(dplyr)
 source("code/read_data_functions.R")
 source("code/preprocess_functions.R")
 source("code/postprocess_functions.R")
-source("code/siap.R")
 
 source("code/realdata_siap_wrapper.R")
 source("code/realdata_gp_wrapper.R")
@@ -28,10 +28,6 @@ d2 <- ncol(x)
 
 # -------- helper functions ----------
 {
-  # subsample_null = function(data, job, ...) {
-  #   return(NULL) 
-  # }
-  
   subsample_cal <- function(data, job, p.valid, cal=F, p.cal, ...) {
     d1 <- nrow(data)
     d2 <- ncol(data)
@@ -101,7 +97,6 @@ d2 <- ncol(x)
 }
 
 # ------- add problems and algorithms --------
-# addProblem(name = "ssi", data = x, fun = subsample_null, reg = reg, seed = 1) 
 addProblem(name = "ssi_tr", data = x, fun = subsample, reg = reg, seed = 1) 
 addProblem(name = "ssi_tr_batch", data = x, fun = subsample_divide, reg = reg, seed = 1) 
 addProblem(name = "ssi_tr_cal", data = x, fun = subsample_cal, reg = reg, seed = 1) 
@@ -110,9 +105,8 @@ addAlgorithm(name = "gp", fun = gp.wrapper, reg = reg)
 addAlgorithm(name = "siap", fun = siap.wrapper, reg = reg)
 addAlgorithm(name = "marss", fun = marss.wrapper, reg = reg)
 
-# -------- submit jobs --------
+# --------- add jobs -----------
 {
-  ## --------- add jobs -----------
   ### --------- siap -----------
   cmd <- sprintf('Rscript hyper_param_tuning_siap.R %s', account) # hyper-parameter tuning
   system(cmd)
@@ -135,7 +129,7 @@ addAlgorithm(name = "marss", fun = marss.wrapper, reg = reg)
   
   
   ### -------------- gp -----------------
-  ades = list(gp = data.frame(covfun = "exponential_isotropic"))
+  ades = list(gp = data.frame(covfun = "exponential_isotropic", z.flag = c(T,F), diff = T))
   pdes = list(ssi_tr = data.frame(p.valid = 0.1))
   addExperiments(prob.designs = pdes, algo.designs = ades, repls = 1, reg = reg)
   
@@ -149,23 +143,25 @@ addAlgorithm(name = "marss", fun = marss.wrapper, reg = reg)
   ades = list(marss = data.frame(model = "low-rank", p = p, r = 1))
   pdes = list(ssi_tr_batch = data.frame(p.valid = 0.1, id = 1:nb, nv = nv))
   
-  ## ----- submit jobs ------
-  resources = list(account = account, walltime = '4:00:00', memory='10000m', ncpus=10)
-  submitJobs(findExperiments(prob.name = "ssi_tr_cal", 
-                             algo.pars = (lambda == siap_par$lambda[2] & 
-                                            lambda1 == siap_par$lambda1[2] & 
-                                            lambda2 == siap_par$lambda2[2] & 
-                                            alpha == siap_par$alpha[2] & 
-                                            time.lag == siap_par$time.lag[2])) %>% ijoin(findNotDone()), resources = resources) # siap
-  
-  resources = list(account = account, walltime = '4:00:00', memory='10000m', ncpus=6)
-  submitJobs(getJobTable()$job.id[getJobTable()$problem == "ssi_tr" & getJobTable()$algorithm %in% c("gp")], resources = resources) # gp
-  
-  resources = list(account = account, walltime = '4:00:00', memory='1000m', ncpus=10, chunks.as.arrayjobs = TRUE)
-  submit_ids = findExperiments(prob.name = "ssi_tr_batch", algo.name = "marss", 
-                               algo.pars = (p == ades$marss$p & r == ades$marss$r))
-  submitJobs(get_jobdf(submit_ids, jobs_per_chunk = 4), resources = resources) # marss
 }
+
+# -------- submit jobs --------
+resources = list(account = account, walltime = '4:00:00', memory='10000m', ncpus=10)
+submitJobs(findExperiments(prob.name = "ssi_tr_cal", 
+                            algo.pars = (lambda == siap_par$lambda[2] & 
+                                          lambda1 == siap_par$lambda1[2] & 
+                                          lambda2 == siap_par$lambda2[2] & 
+                                          alpha == siap_par$alpha[2] & 
+                                          time.lag == siap_par$time.lag[2])) %>% ijoin(findNotDone()), resources = resources) # siap
+
+resources = list(account = account, walltime = '4:00:00', memory='10000m', ncpus=6)
+submitJobs(getJobTable()$job.id[getJobTable()$problem == "ssi_tr" & getJobTable()$algorithm %in% c("gp")], resources = resources) # gp
+
+resources = list(account = account, walltime = '4:00:00', memory='1000m', ncpus=10, chunks.as.arrayjobs = TRUE)
+submit_ids = findExperiments(prob.name = "ssi_tr_batch", algo.name = "marss", 
+                              algo.pars = (p == ades$marss$p & r == ades$marss$r))
+submitJobs(get_jobdf(submit_ids, jobs_per_chunk = 4), resources = resources) # marss
+
 
 # ------ wait for job completion -----
 waitForJobs()

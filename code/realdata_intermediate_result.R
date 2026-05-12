@@ -20,18 +20,12 @@ d <- readRDS(file = "./output/realdata/alpha.rds")
 p <- readRDS(file = "./output/realdata/p.rds")
 ids <- findExperiments(prob.name = "ssi_tr_cal", 
                        algo.pars = (lambda == c & lambda1 == a & lambda2 == b & alpha == d & time.lag == p))
-# siap0.res <- loadResult(
-#   ids[which(sapply(unwrap(getJobPars(ids))$prd.type, function(v) identical(v, c("l","y")))), ]
-# )
 siap.res <- loadResult(
   ids[which(sapply(unwrap(getJobPars(ids))$prd.type, function(v) identical(v, c("l","s","y")))), ]
 )
-
-gp.res <- loadResult(
-  findExperiments(prob.name = "ssi_tr", algo.name = "gp")
-)
-
 saveRDS(siap.res, file = "./output/realdata/siap_traintest.rds")
+
+gp.res <- loadResult(findExperiments(prob.name = "ssi_tr", algo.name =  "gp", algo.pars = (z.flag == F)))
 saveRDS(gp.res, file = "./output/realdata/gp_traintest.rds")
 
 # -------------------- marss --------------------

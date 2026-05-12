@@ -1,11 +1,11 @@
-gp.wrapper <- function(data, job, instance, covfun, ...) { 
+gp.wrapper <- function(data, job, instance, covfun, z.flag = T, diff = T, ...) { 
   library(GpGp)
   source("code/preprocess_functions.R")
   source("code/postprocess_functions.R")
   
   x <- data
   x[instance] <- NA
-  pre_par <- preprocess_func(x, box.cox = F)
+  pre_par <- preprocess_func(x, diff = diff, box.cox = F)
   d1 <- nrow(x)
   d2 <- ncol(x)
   
@@ -19,22 +19,26 @@ gp.wrapper <- function(data, job, instance, covfun, ...) {
   x_obs <- x_df$value[not_missing]
   locs_obs <- cbind(x_df$row[not_missing], x_df$col[not_missing])
   
-  
-  period = c(11 * 365, 26.8)
-  tx = seq(1, ncol(pre_par$x_ready))
-  Phi = cbind(
-    splines2::mSpline(x = tx, df = 4, 
-                      periodic = TRUE, 
-                      degree = 3, 
-                      intercept = T,
-                      Boundary.knots = c(0, period[1])), # Phi_l
-    splines2::mSpline(x = tx, df = 3, 
-                      periodic = TRUE, 
-                      degree = 3, 
-                      intercept = F,
-                      Boundary.knots = c(0, period[2])) # Phi_s
-  ) # n x 7
-  z <- cbind(Phi[locs_obs[, 2], ], locs_obs[, 1]) # n_obs x 8
+  if (z.flag) {
+    period = c(11 * 365, 26.8)
+    tx = seq(1, ncol(pre_par$x_ready))
+    Phi = cbind(
+      splines2::mSpline(x = tx, df = 4, 
+                        periodic = TRUE, 
+                        degree = 3, 
+                        intercept = T,
+                        Boundary.knots = c(0, period[1])), # Phi_l
+      splines2::mSpline(x = tx, df = 3, 
+                        periodic = TRUE, 
+                        degree = 3, 
+                        intercept = F,
+                        Boundary.knots = c(0, period[2])) # Phi_s
+    ) # n x 7
+    z <- cbind(Phi[locs_obs[, 2], ], locs_obs[, 1]) # n_obs x 8
+  } else {
+    z <- NULL
+  }
+
   
   
   start <- Sys.time()
@@ -43,8 +47,13 @@ gp.wrapper <- function(data, job, instance, covfun, ...) {
   
   is_missing <- is.na(x_df$value)
   locs_pred <- cbind(x_df$row[is_missing], x_df$col[is_missing])
-  z_pred <- cbind(Phi[locs_pred[, 2], ], locs_pred[, 1]) # n_obs x 8
-  
+
+  if (z.flag) {
+    z_pred <- cbind(Phi[locs_pred[, 2], ], locs_pred[, 1]) # n_miss x 8
+  } else {
+    z_pred <- as.matrix(rep(1, sum(is_missing))) # n_miss x 1
+  }
+
   start <- Sys.time()
   pred <- GpGp::predictions(fit = gpfit, locs_pred = locs_pred, X_pred = z_pred, m = 30) # m: number of neighbors
   runtime.pred <- Sys.time() - start
