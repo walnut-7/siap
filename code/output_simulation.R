@@ -16,10 +16,10 @@ get_df_overall_mrae <- function(gp_diff_flag = T, marss_diff_flag = T){
   df2 <- readRDS(file = result_path_simu("overall_rel_mrae_margin", 0.3, gp_diff_flag, marss_diff_flag))
   df3 <- readRDS(file = result_path_simu("overall_rel_mrae_margin", 0.5, gp_diff_flag, marss_diff_flag))
   
-  df_trmf <- read.table(file = "./output/test9/overall_rel_mrae_margin_trmf.csv", sep = ',', header = T) %>%
+  df_trmf <- read.table(file = "./output/simulation/overall_rel_mrae_margin_trmf.csv", sep = ',', header = T) %>%
     filter(type %in% c('w', 'o'))
   df_trmf$pdt <- as.factor(df_trmf$pdt)
-  df_latc <- read.table(file = "./output/test9/overall_rel_mrae_margin_latc.csv", sep = ',', header = T) %>%
+  df_latc <- read.table(file = "./output/simulation/overall_rel_mrae_margin_latc.csv", sep = ',', header = T) %>%
     filter(type %in% c('w', 'o'))
   df_latc$pdt <- as.factor(df_latc$pdt)
   
