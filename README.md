@@ -39,6 +39,8 @@ The data used in the simulation study and SSI reconstruction analysis are public
 | Synthetic SSI | ssi_synthetic_interpolated.nc |
 | CSIM SSI | csim_ssi_L3_latest.nc |
 
+The \href{https://deepblue.lib.umich.edu/data/concern/data_sets/5d86p133v}{synthetic SSI benchmark data} and \href{https://deepblue.lib.umich.edu/data/concern/data_sets/rx913r011}{reconstructed SSI data product} by SIAP are publicly available.
+
 ## Data citation and availability
 
 1. [TSIS-1 SIM SSI, v13, accessed Mar 13 2023](https://disc.gsfc.nasa.gov/datacollection/TSIS_SSI_L3_24HR_13.html) (used in SSI reconstruction section)
