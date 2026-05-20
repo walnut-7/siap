@@ -43,10 +43,10 @@ The [synthetic SSI benchmark data](https://deepblue.lib.umich.edu/data/concern/d
 
 ## Data citation and availability
 
-1. [TSIS-1 SIM SSI, v13, accessed Mar 13 2023](https://disc.gsfc.nasa.gov/datacollection/TSIS_SSI_L3_24HR_13.html) (used in SSI reconstruction section)
+1. [TSIS-1 SIM SSI, v9, accessed Mar 13 2023](https://disc.gsfc.nasa.gov/datasets/TSIS_SSI_L3_24HR_14/summary) (used in SSI reconstruction section)
 
   Citation to the data:
-  - Richard, Erik. 2025. “TSIS SIM Level 3 Solar Spectral Irradiance 24-Hour Means V13.” NASA Goddard Earth Sciences Data and Information Services Center. https://doi.org/10.5067/TSIS/SIM/DATA326.
+  - Richard, Erik. 2025. “TSIS SIM Level 3 Solar Spectral Irradiance 24-Hour Means V14.” NASA Goddard Earth Sciences Data and Information Services Center. https://doi.org/10.5067/TSIS/SIM/DATA328.
 
   Related publications:
   - Coddington, O. M., E. C. Richard, D. Harber, P. Pilewskie, T. N. Woods, M. Snow, K. Chance, X. Liu, and K. Sun. 2023. “Version 2 of the TSIS-1 Hybrid Solar Reference Spectrum and Extension to the Full Spectrum.” Earth and Space Science 10 (3): e2022EA002637. https://doi.org/10.1029/2022EA002637.
